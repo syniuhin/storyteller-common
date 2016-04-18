@@ -1,0 +1,641 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Storyteller by syniuhin</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/github-dark.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Storyteller</h1>
+        <p>Отчёт по курсовой работе.</p>
+        <p class="view"><a href="https://github.com/syniuhin/storyteller-common">View the Project on GitHub <small>syniuhin/storyteller-common</small></a></p>
+        <ul>
+          <li><a href="https://github.com/syniuhin/storyteller-common/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/syniuhin/storyteller-common/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/syniuhin/storyteller-common">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h2>
+<a id="Вступление" class="anchor" href="#%D0%92%D1%81%D1%82%D1%83%D0%BF%D0%BB%D0%B5%D0%BD%D0%B8%D0%B5" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Вступление</h2>
+
+<p>Для курсовой работы я решил сделать небольшой сервис вокруг статистической модели для генерирования абзаца стилизованного текста по изображению <a href="https://github.com/ryankiros/neural-storyteller">neural-storyteller</a>. Проект состоит из 2 частей: серверной на фреймворке Flask и клиентской на Android.</p>
+
+<p>В клиенте основной функционал - это загрузка своих фото, редактирование и сохранение полученных описаний. Так же существует список уже готовых описаний, который кешируется в локальную базу данных.</p>
+
+<p>Так же я добавил гостевую / демо сессию для того, чтобы пользователи могли попробовать приложение без регистрации.</p>
+
+<p>Для работы с сетью в клиенте я использовал 3 библиотеки – <a href="https://square.github.io/retrofit/">Retrofit</a> для удобной работы с API, <a href="https://github.com/ReactiveX/RxAndroid">RxAndroid</a> (<a href="http://reactivex.io/">Reactive eXtensions</a> для Android, расширения для удобного асинхронного, реактивного программирования) и <a href="https://square.github.io/picasso/">Picasso</a> для работы с изображениями.</p>
+
+<p>План</p>
+
+<ul>
+<li>
+<a href="#head_server">Шаблоны сервера</a>:
+
+<ul>
+<li><a href="#head_strategy">Strategy</a></li>
+<li><a href="#head_corb">Chain of Responsibility + Builder</a></li>
+</ul>
+</li>
+<li>
+<a href="#head_client">Шаблоны клиента</a>:
+
+<ul>
+<li><a href="#head_template">Template method</a></li>
+<li><a href="#head_factory">Factory Method</a></li>
+<li><a href="#head_pba">Proxy + Bridge + Adapter</a></li>
+</ul>
+</li>
+<li><a href="#head_implicit">Неявные шаблоны клиента</a></li>
+</ul>
+
+<h2>
+<a id="Шаблоны-сервера" class="anchor" href="#%D0%A8%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D1%8B-%D1%81%D0%B5%D1%80%D0%B2%D0%B5%D1%80%D0%B0" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_server"></a>Шаблоны сервера</h2>
+
+<h3>
+<a id="strategy" class="anchor" href="#strategy" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_strategy"></a>Strategy</h3>
+
+<p>В серверной части для авторизации использует Basic HTTP Authentication. Так как впоследствии я хотел бы добавить аутентификацию через учётные записи Google, где используются OpenID, то я использовал Strategy для текущей и планирую использовать для последующих стратегий аутентификации.</p>
+
+<p><code>auth.util</code>:</p>
+
+<div class="highlight highlight-source-python"><pre><span class="pl-k">class</span> <span class="pl-en">AuthUser</span>(<span class="pl-e">Enum</span>):
+  auth <span class="pl-k">=</span> <span class="pl-c1">1</span>
+  demo <span class="pl-k">=</span> <span class="pl-c1">2</span>
+  unknown <span class="pl-k">=</span> <span class="pl-c1">3</span>
+
+auth.auth_strategies:
+<span class="pl-k">class</span> <span class="pl-en">AuthenticationStrategy</span>(<span class="pl-c1">object</span>):
+  <span class="pl-k">def</span> <span class="pl-en">check</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request_data</span>):
+    <span class="pl-k">raise</span> <span class="pl-c1">NotImplementedError</span>(<span class="pl-s"><span class="pl-pds">'</span>AuthStrategy is an abstraction!<span class="pl-pds">'</span></span>)
+
+  <span class="pl-k">def</span> <span class="pl-en">get_user_id</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request_data</span>):
+    <span class="pl-k">raise</span> <span class="pl-c1">NotImplementedError</span>(<span class="pl-s"><span class="pl-pds">'</span>AuthStrategy is an abstraction!<span class="pl-pds">'</span></span>)
+
+
+<span class="pl-k">class</span> <span class="pl-en">HttpBasicAuthenticationStrategy</span>(<span class="pl-e">AuthenticationStrategy</span>):
+  <span class="pl-k">def</span> <span class="pl-en">check</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request_data</span>):
+    <span class="pl-c"># May be confusing here, but usernames themselves are not unique and emails</span>
+    <span class="pl-c"># are.</span>
+    <span class="pl-k">if</span> request_data.username <span class="pl-k">==</span> <span class="pl-s"><span class="pl-pds">'</span>foo@example.com<span class="pl-pds">'</span></span> \
+        <span class="pl-k">and</span> request_data.password <span class="pl-k">==</span> <span class="pl-s"><span class="pl-pds">'</span>bar<span class="pl-pds">'</span></span>:
+      <span class="pl-k">return</span> AuthUser.demo
+    potential_user <span class="pl-k">=</span> User.query.filter_by(<span class="pl-v">email</span><span class="pl-k">=</span>request_data.username).first()
+    <span class="pl-k">if</span> potential_user <span class="pl-k">is</span> <span class="pl-k">not</span> <span class="pl-c1">None</span> <span class="pl-k">and</span> \
+        potential_user.check_password(request_data.password):
+      <span class="pl-k">return</span> AuthUser.auth
+    <span class="pl-k">return</span> AuthUser.unknown
+
+  <span class="pl-k">def</span> <span class="pl-en">get_user_id</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request_data</span>):
+    potential_user <span class="pl-k">=</span> User.query.filter_by(<span class="pl-v">email</span><span class="pl-k">=</span>request_data.username).first()
+    <span class="pl-k">if</span> potential_user <span class="pl-k">is</span> <span class="pl-k">not</span> <span class="pl-c1">None</span>:
+      <span class="pl-k">return</span> potential_user.id
+    <span class="pl-k">return</span> <span class="pl-c1">ValueError</span>(<span class="pl-s"><span class="pl-pds">'</span>There<span class="pl-cce">\'</span>s no such user!<span class="pl-pds">'</span></span>)</pre></div>
+
+<p>Пример использования:</p>
+
+<div class="highlight highlight-source-python"><pre>  <span class="pl-k">def</span> <span class="pl-en">check_auth</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request</span>):
+    <span class="pl-k">if</span> <span class="pl-k">not</span> request.authorization:
+      <span class="pl-k">return</span> <span class="pl-c1">False</span>
+    auth_user <span class="pl-k">=</span> <span class="pl-v">self</span>.auth_strategy.check(request.authorization)
+    <span class="pl-k">if</span> auth_user <span class="pl-k">is</span> AuthUser.unknown <span class="pl-k">or</span> auth_user <span class="pl-k">is</span> AuthUser.demo:
+      <span class="pl-k">return</span> <span class="pl-c1">False</span>
+    <span class="pl-k">return</span> <span class="pl-c1">True</span></pre></div>
+
+<p>Немного другим образом я использовал стратегию для авторизации, где для каждой сущности и демо сессии создал отдельные стратегии авторизации, которые работают с конкретной сущностью и <code>user_id</code>:</p>
+
+<p><code>auth.auth_strategies</code>:</p>
+
+<div class="highlight highlight-source-python"><pre><span class="pl-k">class</span> <span class="pl-en">AuthorizationStrategy</span>(<span class="pl-c1">object</span>):
+  <span class="pl-k">def</span> <span class="pl-en">check</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">user_id</span>):
+    <span class="pl-k">raise</span> <span class="pl-c1">NotImplementedError</span>(<span class="pl-s"><span class="pl-pds">'</span>AuthStrategy is an abstraction!<span class="pl-pds">'</span></span>)
+
+
+<span class="pl-k">class</span> <span class="pl-en">FileAuthorizationStrategy</span>(<span class="pl-e">AuthorizationStrategy</span>):
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">file_id</span>):
+    <span class="pl-v">self</span>.file_id <span class="pl-k">=</span> file_id
+
+  <span class="pl-k">def</span> <span class="pl-en">check</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">user_id</span>):
+    <span class="pl-c"># Checks if particular file belongs to a user_id.</span>
+    <span class="pl-k">return</span> UploadedFile.query.filter_by(<span class="pl-v">id</span><span class="pl-k">=</span><span class="pl-v">self</span>.file_id,
+                                        <span class="pl-v">user_id</span><span class="pl-k">=</span>user_id).first() <span class="pl-k">is</span> <span class="pl-k">not</span> <span class="pl-c1">None</span>
+
+
+<span class="pl-k">class</span> <span class="pl-en">DemoFileAuthorizationStrategy</span>(<span class="pl-e">FileAuthorizationStrategy</span>):
+  <span class="pl-k">def</span> <span class="pl-en">check</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">user_id</span>):
+    <span class="pl-k">return</span> user_id <span class="pl-k">==</span> <span class="pl-k">-</span><span class="pl-c1">1</span>
+
+
+<span class="pl-k">class</span> <span class="pl-en">StoryAuthorizationStrategy</span>(<span class="pl-e">AuthorizationStrategy</span>):
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">story_id</span>):
+    <span class="pl-v">self</span>.story_id <span class="pl-k">=</span> story_id
+
+  <span class="pl-k">def</span> <span class="pl-en">check</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">user_id</span>):
+    <span class="pl-c"># Checks if particular story belongs to a user_id.</span>
+    <span class="pl-k">return</span> Story.query.filter_by(<span class="pl-v">id</span><span class="pl-k">=</span><span class="pl-v">self</span>.story_id,
+                                 <span class="pl-v">user_id</span><span class="pl-k">=</span>user_id).first() <span class="pl-k">is</span> <span class="pl-k">not</span> <span class="pl-c1">None</span></pre></div>
+
+<p>Пример использования:</p>
+
+<div class="highlight highlight-source-python"><pre>  <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">fn</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    user_id <span class="pl-k">=</span> kwargs.get(<span class="pl-s"><span class="pl-pds">'</span>user_id<span class="pl-pds">'</span></span>)
+    <span class="pl-k">if</span> <span class="pl-k">not</span> <span class="pl-v">self</span>.authorization_strategy.check(user_id):
+      abort(<span class="pl-c1">401</span>)
+    <span class="pl-k">return</span> <span class="pl-v">self</span>.successor.execute(fn, <span class="pl-k">**</span>kwargs)</pre></div>
+
+<h3>
+<a id="chain-of-responsibility--builder" class="anchor" href="#chain-of-responsibility--builder" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_corb"></a>Chain of Responsibility + Builder</h3>
+
+<p>Для обработки запроса я посчитал уместным использовать Chain of Responsibility, так как некоторые запросы можно просто обработать, некоторые нужно только аутентифицировать, некоторые нужно дополнительно авторизовывать. Так же, впоследствии, я бы хотел использовать разные обработчики для разных видов статистических моделей.</p>
+
+<p><code>auth_handlers.py</code>:</p>
+
+<div class="highlight highlight-source-python"><pre><span class="pl-k">class</span> <span class="pl-en">Handler</span>(<span class="pl-c1">object</span>):
+  <span class="pl-s"><span class="pl-pds">"""</span></span>
+<span class="pl-s">  Abstraction over Chain of Responsibility element (handler).</span>
+<span class="pl-s">  We're passing function as a parameter `fn`</span>
+<span class="pl-s">  <span class="pl-pds">"""</span></span>
+  <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">fn</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    <span class="pl-k">raise</span> <span class="pl-c1">NotImplementedError</span>()
+
+
+<span class="pl-k">class</span> <span class="pl-en">FinalHandler</span>(<span class="pl-e">Handler</span>):
+  <span class="pl-s"><span class="pl-pds">"""</span></span>
+<span class="pl-s">  Simple handler that just executes passed functions.</span>
+<span class="pl-s">  <span class="pl-pds">"""</span></span>
+  <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">fn</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    <span class="pl-k">return</span> fn(<span class="pl-k">**</span>kwargs)
+
+
+<span class="pl-k">class</span> <span class="pl-en">PredecessorHandler</span>(<span class="pl-e">Handler</span>):
+  <span class="pl-s"><span class="pl-pds">"""</span></span>
+<span class="pl-s">  Abstract handler that is not in the end of a chain.</span>
+<span class="pl-s">  <span class="pl-pds">"""</span></span>
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">successor</span>):
+    <span class="pl-v">self</span>.successor <span class="pl-k">=</span> successor
+
+  <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">fn</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    <span class="pl-k">raise</span> <span class="pl-c1">NotImplementedError</span>()
+
+
+<span class="pl-k">class</span> <span class="pl-en">AuthenticationHandler</span>(<span class="pl-e">PredecessorHandler</span>):
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">successor</span>, <span class="pl-smi">authentication_strategy</span>):
+    <span class="pl-c1">super</span>(AuthenticationHandler, <span class="pl-v">self</span>).<span class="pl-c1">__init__</span>(successor)
+    <span class="pl-v">self</span>.auth_strategy <span class="pl-k">=</span> authentication_strategy
+
+  <span class="pl-k">def</span> <span class="pl-en">check_auth</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request</span>):
+    <span class="pl-k">if</span> <span class="pl-k">not</span> request.authorization:
+      <span class="pl-k">return</span> <span class="pl-c1">False</span>
+    auth_user <span class="pl-k">=</span> <span class="pl-v">self</span>.auth_strategy.check(request.authorization)
+    <span class="pl-k">if</span> auth_user <span class="pl-k">is</span> AuthUser.unknown <span class="pl-k">or</span> auth_user <span class="pl-k">is</span> AuthUser.demo:
+      <span class="pl-k">return</span> <span class="pl-c1">False</span>
+    <span class="pl-k">return</span> <span class="pl-c1">True</span>
+
+  <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">fn</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    request <span class="pl-k">=</span> kwargs.get(<span class="pl-s"><span class="pl-pds">'</span>bound_request<span class="pl-pds">'</span></span>)
+    <span class="pl-k">if</span> <span class="pl-k">not</span> <span class="pl-v">self</span>.check_auth(request):
+      abort(<span class="pl-c1">401</span>)
+    <span class="pl-k">return</span> <span class="pl-v">self</span>.successor.execute(fn, <span class="pl-k">**</span>kwargs)
+
+
+<span class="pl-k">class</span> <span class="pl-en">AuthenticationDemoHandler</span>(<span class="pl-e">AuthenticationHandler</span>):
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">successor</span>, <span class="pl-smi">authentication_strategy</span>):
+    <span class="pl-c1">super</span>(AuthenticationDemoHandler, <span class="pl-v">self</span>).<span class="pl-c1">__init__</span>(successor,
+                                                    authentication_strategy)
+
+  <span class="pl-k">def</span> <span class="pl-en">check_auth</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">request</span>):
+    <span class="pl-k">if</span> <span class="pl-k">not</span> request.authorization:
+      <span class="pl-k">return</span> <span class="pl-c1">False</span>
+    auth_user <span class="pl-k">=</span> <span class="pl-v">self</span>.auth_strategy.check(request.authorization)
+    <span class="pl-k">if</span> auth_user <span class="pl-k">is</span> AuthUser.unknown <span class="pl-k">or</span> auth_user <span class="pl-k">is</span> AuthUser.auth:
+      <span class="pl-k">return</span> <span class="pl-c1">False</span>
+    <span class="pl-k">return</span> <span class="pl-c1">True</span>
+
+
+<span class="pl-k">class</span> <span class="pl-en">AuthorizationHandler</span>(<span class="pl-e">PredecessorHandler</span>):
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">successor</span>, <span class="pl-smi">authorization_strategy</span>):
+    <span class="pl-c1">super</span>(AuthorizationHandler, <span class="pl-v">self</span>).<span class="pl-c1">__init__</span>(successor)
+    <span class="pl-v">self</span>.authorization_strategy <span class="pl-k">=</span> authorization_strategy
+
+  <span class="pl-k">def</span> <span class="pl-en">execute</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">fn</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    user_id <span class="pl-k">=</span> kwargs.get(<span class="pl-s"><span class="pl-pds">'</span>user_id<span class="pl-pds">'</span></span>)
+    <span class="pl-k">if</span> <span class="pl-k">not</span> <span class="pl-v">self</span>.authorization_strategy.check(user_id):
+      abort(<span class="pl-c1">401</span>)
+    <span class="pl-k">return</span> <span class="pl-v">self</span>.successor.execute(fn, <span class="pl-k">**</span>kwargs)</pre></div>
+
+<p>К тому же, я посчитал, что раз мы имеем такой удобный интерфейс для обработки наших запросов, то нужно создать удобный интерфейс для создания этих обработчиков. Так как я достаточно неопытный человек в Python и на Java написал побольше кода, то решил реализовать Builder:</p>
+
+<div class="highlight highlight-source-python"><pre><span class="pl-k">class</span> <span class="pl-en">HandlerBuilder</span>(<span class="pl-c1">object</span>):
+  <span class="pl-s"><span class="pl-pds">"""</span></span>
+<span class="pl-s">  Builder class to make creation of handlers easier.</span>
+<span class="pl-s">  Initializes with FinalHandler by default.</span>
+<span class="pl-s">  <span class="pl-pds">"""</span></span>
+  <span class="pl-k">def</span> <span class="pl-c1">__init__</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>):
+    <span class="pl-v">self</span>.handler <span class="pl-k">=</span> FinalHandler()
+
+  <span class="pl-k">def</span> <span class="pl-en">add_handler</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>, <span class="pl-smi">predecessor</span>, <span class="pl-k">**</span><span class="pl-smi">kwargs</span>):
+    <span class="pl-v">self</span>.handler <span class="pl-k">=</span> predecessor(<span class="pl-v">successor</span><span class="pl-k">=</span><span class="pl-v">self</span>.handler, <span class="pl-k">**</span>kwargs)
+    <span class="pl-k">return</span> <span class="pl-v">self</span>
+
+  <span class="pl-k">def</span> <span class="pl-en">build</span>(<span class="pl-smi"><span class="pl-smi">self</span></span>):
+    <span class="pl-k">return</span> <span class="pl-v">self</span>.handler</pre></div>
+
+<hr>
+
+<h2>
+<a id="Шаблоны-клиента" class="anchor" href="#%D0%A8%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D1%8B-%D0%BA%D0%BB%D0%B8%D0%B5%D0%BD%D1%82%D0%B0" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_client"></a>Шаблоны клиента</h2>
+
+<h3>
+<a id="template-method" class="anchor" href="#template-method" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_template"></a>Template Method</h3>
+
+<p>Для разных подклассов Activity я решил использовать Template Method, потому что последовательность определения разных View, установка им поведения, инициализация сервиса для запросов к серверу у них одинаковая, разнятся лишь конкретные объекты – поля Activity.</p>
+
+<div class="highlight highlight-source-java"><pre><span class="pl-k">abstract</span> <span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">BaseActivity</span> <span class="pl-k">extends</span> <span class="pl-e">AppCompatActivity</span> {
+  <span class="pl-c1">...</span>
+  <span class="pl-k">abstract</span> <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">findViews</span>();
+
+  <span class="pl-k">abstract</span> <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">setupViews</span>();
+
+  <span class="pl-k">abstract</span> <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">initService</span>();
+  <span class="pl-c1">...</span>
+}</pre></div>
+
+<div class="highlight highlight-source-java"><pre><span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">MainActivity</span> <span class="pl-k">extends</span> <span class="pl-e">BaseActivity</span> <span class="pl-k">implements</span>
+    <span class="pl-e">LoaderManager</span>.<span class="pl-e">LoaderCallbacks&lt;<span class="pl-smi">Cursor</span>&gt;</span>,
+    <span class="pl-e">SinglePictureAdapter</span>.<span class="pl-e">StoryItemHolder</span>.<span class="pl-e">ClickCallback</span> {
+
+  <span class="pl-k">private</span> <span class="pl-smi">Toolbar</span> mToolbar;
+  <span class="pl-k">private</span> <span class="pl-smi">FloatingActionButton</span> mFab;
+
+  <span class="pl-k">private</span> <span class="pl-smi">SwipeRefreshLayout</span> mSwipeRefreshView;
+  <span class="pl-k">private</span> <span class="pl-smi">RecyclerView</span> mRecyclerView;
+  <span class="pl-k">private</span> <span class="pl-smi">SinglePictureAdapter</span> mAdapter;
+  <span class="pl-k">private</span> <span class="pl-smi">LinearLayoutManager</span> mLayoutManager;
+
+  <span class="pl-k">private</span> <span class="pl-smi">StoryService</span> mStoryService <span class="pl-k">=</span> <span class="pl-c1">null</span>;
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">onCreate</span>(<span class="pl-smi">Bundle</span> <span class="pl-v">savedInstanceState</span>) {
+    <span class="pl-v">super</span><span class="pl-k">.</span>onCreate(savedInstanceState);
+    setContentView(<span class="pl-smi">R</span><span class="pl-k">.</span>layout<span class="pl-k">.</span>activity_main);
+    <span class="pl-c1">...</span>
+    findViews();
+    setupViews();
+    initService();
+    <span class="pl-c1">...</span>
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">onResume</span>() {
+    <span class="pl-v">super</span><span class="pl-k">.</span>onResume();
+    loadStories();
+  }
+
+  <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">findViews</span>() {
+    mToolbar <span class="pl-k">=</span> (<span class="pl-smi">Toolbar</span>) findViewById(<span class="pl-smi">R</span><span class="pl-k">.</span>id<span class="pl-k">.</span>toolbar);
+    mFab <span class="pl-k">=</span> (<span class="pl-smi">FloatingActionButton</span>) findViewById(<span class="pl-smi">R</span><span class="pl-k">.</span>id<span class="pl-k">.</span>fab);
+    mRecyclerView <span class="pl-k">=</span> (<span class="pl-smi">RecyclerView</span>) findViewById(<span class="pl-smi">R</span><span class="pl-k">.</span>id<span class="pl-k">.</span>main_recyclerview);
+    mSwipeRefreshView <span class="pl-k">=</span> (<span class="pl-smi">SwipeRefreshLayout</span>) findViewById(<span class="pl-smi">R</span><span class="pl-k">.</span>id<span class="pl-k">.</span>main_swipenrefresh);
+  }
+
+  <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">setupViews</span>() {
+    setSupportActionBar(mToolbar);
+
+    mFab<span class="pl-k">.</span>setOnClickListener(<span class="pl-k">new</span> <span class="pl-smi">View</span>.<span class="pl-smi">OnClickListener</span>() {
+      <span class="pl-k">@Override</span>
+      <span class="pl-k">public</span> <span class="pl-k">void</span> <span class="pl-en">onClick</span>(<span class="pl-smi">View</span> <span class="pl-v">view</span>) {
+        startUploadingActivity();
+      }
+    });
+
+    mRecyclerView<span class="pl-k">.</span>setHasFixedSize(<span class="pl-c1">true</span>);
+
+    mLayoutManager <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">LinearLayoutManager</span>(<span class="pl-v">this</span>);
+    mLayoutManager<span class="pl-k">.</span>setReverseLayout(<span class="pl-c1">true</span>);
+    mLayoutManager<span class="pl-k">.</span>setStackFromEnd(<span class="pl-c1">true</span>);
+
+    mRecyclerView<span class="pl-k">.</span>setLayoutManager(mLayoutManager);
+
+    mAdapter <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">SinglePictureAdapter</span>(
+        <span class="pl-c1">null</span>, getApplicationContext(), <span class="pl-v">this</span>);
+    mRecyclerView<span class="pl-k">.</span>setAdapter(mAdapter);
+
+    mSwipeRefreshView<span class="pl-k">.</span>setOnRefreshListener(
+        <span class="pl-k">new</span> <span class="pl-smi">SwipeRefreshLayout</span>.<span class="pl-smi">OnRefreshListener</span>() {
+          <span class="pl-k">@Override</span>
+          <span class="pl-k">public</span> <span class="pl-k">void</span> <span class="pl-en">onRefresh</span>() {
+            loadStories();
+          }
+        });
+
+    getLoaderManager()<span class="pl-k">.</span>initLoader(<span class="pl-c1">0</span>, <span class="pl-c1">null</span>, <span class="pl-v">this</span>);
+  }
+
+  <span class="pl-k">protected</span> <span class="pl-k">void</span> <span class="pl-en">initService</span>() {
+    mStoryService <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">StoryServiceProxyBridge</span>(
+        <span class="pl-k">new</span> <span class="pl-smi">BasicAuthServiceCreator</span>()<span class="pl-k">.</span>createInitializer(<span class="pl-v">this</span>)
+                                     .create(<span class="pl-smi">StoryService</span><span class="pl-k">.</span>class),
+        <span class="pl-v">this</span>, mRecyclerView);
+    compositeSubscription <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">CompositeSubscription</span>();
+  }
+  <span class="pl-c1">...</span>
+}</pre></div>
+
+<h3>
+<a id="factory-method" class="anchor" href="#factory-method" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_factory"></a>Factory Method</h3>
+
+<p>Для разных типов запросов к серверу нам нужны разные типы объектов: наличие аутентификации, её виды, разные временные ограничения для запросов. Для создания этих объектов, ввиду их небольшого разнообразия, я решил применть Factory Method.</p>
+
+<p>Иерархия <code>ServiceCreator</code>:</p>
+
+<div class="highlight highlight-source-java"><pre><span class="pl-k">abstract</span> <span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">ServiceCreator</span> {
+  <span class="pl-k">public</span> <span class="pl-k">static</span> <span class="pl-k">final</span> <span class="pl-smi">String</span> <span class="pl-c1">API_BASE_URL</span> <span class="pl-k">=</span> <span class="pl-c1">BASE_IP</span> <span class="pl-k">+</span> <span class="pl-s"><span class="pl-pds">"</span>/storyteller/<span class="pl-pds">"</span></span>;
+
+  <span class="pl-k">protected</span> <span class="pl-smi">Retrofit</span><span class="pl-k">.</span><span class="pl-smi">Builder</span> retrofitBuilder <span class="pl-k">=</span>
+      <span class="pl-k">new</span> <span class="pl-smi">Retrofit</span>.<span class="pl-smi">Builder</span>()
+          .addCallAdapterFactory(<span class="pl-smi">RxJavaCallAdapterFactory</span><span class="pl-k">.</span>create())
+          .addConverterFactory(<span class="pl-smi">GsonConverterFactory</span><span class="pl-k">.</span>create())
+          .baseUrl(<span class="pl-c1">API_BASE_URL</span>);
+
+  <span class="pl-k">abstract</span> <span class="pl-k">public</span> <span class="pl-smi">Retrofit</span> <span class="pl-en">createInitializer</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>);
+}
+
+<span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">SimpleServiceCreator</span> <span class="pl-k">extends</span> <span class="pl-e">ServiceCreator</span> {
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-smi">Retrofit</span> <span class="pl-en">createInitializer</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>) {
+    <span class="pl-smi">OkHttpClient</span> client <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">SimpleClientCreator</span>()<span class="pl-k">.</span>createClient(context);
+    <span class="pl-k">return</span> retrofitBuilder<span class="pl-k">.</span>client(client)<span class="pl-k">.</span>build();
+  }
+}
+
+<span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">BasicAuthServiceCreator</span> <span class="pl-k">extends</span> <span class="pl-e">ServiceCreator</span> {
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-smi">Retrofit</span> <span class="pl-en">createInitializer</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>) {
+    <span class="pl-smi">OkHttpClient</span> client <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">BasicAuthClientCreator</span>()<span class="pl-k">.</span>createClient(context);
+    <span class="pl-k">return</span> retrofitBuilder<span class="pl-k">.</span>client(client)<span class="pl-k">.</span>build();
+  }
+}</pre></div>
+
+<p>Иерархия <code>ClientCreator</code>:</p>
+
+<div class="highlight highlight-source-java"><pre><span class="pl-k">abstract</span> <span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">ClientCreator</span> {
+  <span class="pl-k">protected</span> <span class="pl-smi">OkHttpClient</span><span class="pl-k">.</span><span class="pl-smi">Builder</span> httpClientBuilder <span class="pl-k">=</span>
+      <span class="pl-k">new</span> <span class="pl-smi">OkHttpClient</span>.<span class="pl-smi">Builder</span>()
+          .connectTimeout(<span class="pl-c1">300</span>, <span class="pl-smi">TimeUnit</span><span class="pl-c1"><span class="pl-k">.</span>SECONDS</span>)
+          .readTimeout(<span class="pl-c1">300</span>, <span class="pl-smi">TimeUnit</span><span class="pl-c1"><span class="pl-k">.</span>SECONDS</span>);
+
+  <span class="pl-k">abstract</span> <span class="pl-k">public</span> <span class="pl-smi">OkHttpClient</span> <span class="pl-en">createClient</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>);
+}
+
+<span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">SimpleClientCreator</span> <span class="pl-k">extends</span> <span class="pl-e">ClientCreator</span> {
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-smi">OkHttpClient</span> <span class="pl-en">createClient</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>) {
+    httpClientBuilder
+        .addInterceptor(<span class="pl-k">new</span> <span class="pl-smi">HttpLoggingInterceptor</span>()
+                            .setLevel(<span class="pl-smi">HttpLoggingInterceptor</span><span class="pl-k">.</span><span class="pl-smi">Level</span><span class="pl-c1"><span class="pl-k">.</span>BODY</span>));
+    <span class="pl-k">return</span> httpClientBuilder<span class="pl-k">.</span>build();
+  }
+}
+
+<span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">BasicAuthClientCreator</span> <span class="pl-k">extends</span> <span class="pl-e">ClientCreator</span> {
+  <span class="pl-c">/**</span>
+<span class="pl-c">   * @param context: Context to create Picasso.Builder and OkHttpClient.</span>
+<span class="pl-c">   * @return Picasso builder for authenticated image loading.</span>
+<span class="pl-c">   */</span>
+  <span class="pl-k">public</span> <span class="pl-k">static</span> <span class="pl-smi">Picasso</span>.<span class="pl-smi">Builder</span> <span class="pl-en">createPicassoBuilder</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>) {
+    <span class="pl-k">return</span> <span class="pl-k">new</span> <span class="pl-smi">Picasso</span>.<span class="pl-smi">Builder</span>(context)<span class="pl-k">.</span>downloader(
+        <span class="pl-k">new</span> <span class="pl-smi">OkHttp3Downloader</span>(
+            <span class="pl-k">new</span> <span class="pl-smi">BasicAuthClientCreator</span>()<span class="pl-k">.</span>createClient(context)));
+  }
+
+  <span class="pl-k">public</span> <span class="pl-smi">OkHttpClient</span> <span class="pl-en">createClient</span>(<span class="pl-smi">Context</span> <span class="pl-v">context</span>) {
+    httpClientBuilder
+        .addInterceptor(<span class="pl-k">new</span> <span class="pl-smi">HttpLoggingInterceptor</span>()
+                            .setLevel(<span class="pl-smi">HttpLoggingInterceptor</span><span class="pl-k">.</span><span class="pl-smi">Level</span><span class="pl-c1"><span class="pl-k">.</span>BASIC</span>));
+
+    <span class="pl-c">// Get authentication header.</span>
+    <span class="pl-k">final</span> <span class="pl-smi">String</span> basic <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">"</span>Basic <span class="pl-pds">"</span></span> <span class="pl-k">+</span>
+        context<span class="pl-k">.</span>getSharedPreferences(<span class="pl-smi">BaseActivity</span><span class="pl-c1"><span class="pl-k">.</span>PREFS_KEY</span>,
+                                     <span class="pl-smi">Context</span><span class="pl-c1"><span class="pl-k">.</span>MODE_PRIVATE</span>)
+               .getString(<span class="pl-s"><span class="pl-pds">"</span>basicAuthHeader<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>);
+
+    httpClientBuilder<span class="pl-k">.</span>addInterceptor(<span class="pl-k">new</span> <span class="pl-smi">Interceptor</span>() {
+      <span class="pl-k">@Override</span>
+      <span class="pl-k">public</span> <span class="pl-smi">Response</span> <span class="pl-en">intercept</span>(<span class="pl-smi">Interceptor</span>.<span class="pl-smi">Chain</span> <span class="pl-v">chain</span>) <span class="pl-k">throws</span> <span class="pl-smi">IOException</span> {
+        <span class="pl-smi">Request</span> original <span class="pl-k">=</span> chain<span class="pl-k">.</span>request();
+
+        <span class="pl-smi">Request</span><span class="pl-k">.</span><span class="pl-smi">Builder</span> requestBuilder <span class="pl-k">=</span>
+            original<span class="pl-k">.</span>newBuilder()
+                    .header(<span class="pl-s"><span class="pl-pds">"</span>Authorization<span class="pl-pds">"</span></span>, basic)
+                    .header(<span class="pl-s"><span class="pl-pds">"</span>Accept<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span>application/json<span class="pl-pds">"</span></span>)
+                    .method(original<span class="pl-k">.</span>method(), original<span class="pl-k">.</span>body());
+
+        <span class="pl-smi">Request</span> request <span class="pl-k">=</span> requestBuilder<span class="pl-k">.</span>build();
+        <span class="pl-k">return</span> chain<span class="pl-k">.</span>proceed(request);
+      }
+    });
+
+    <span class="pl-k">return</span> httpClientBuilder<span class="pl-k">.</span>build();
+  }
+}</pre></div>
+
+<h3>
+<a id="proxy--bridge--adapter" class="anchor" href="#proxy--bridge--adapter" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_pba"></a>Proxy + Bridge + Adapter</h3>
+
+<p>Во время работы с сервером могут возникнуть разнообразные проблемы, некоторые из них – отсутствие интернета на клиенте или отсутствие данных для аутентификации. Для того, чтобы облегчить понимание этих проблем и уменьшить бесполезное взаимодействие с сервером я использовал шаблон Proxy. Так как у нас могут быть разные имплементации сервиса запросов, то я решил использовать Bridge для взаимной подмены этих реализаций. В свою очередь, так как Retrofit написана при помощи рефлексии и не позволяет объединять сервисы запросов в иерархии наследования, я написал простенький Adapter, который помогает мне приводить разные сервисы к единому интерфейсу.</p>
+
+<p>Bridge + Proxy в <code>StoryServiceProxyBridge</code>:</p>
+
+<div class="highlight highlight-source-java"><pre><span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">StoryServiceProxyBridge</span> <span class="pl-k">implements</span> <span class="pl-e">StoryService</span> {
+  <span class="pl-k">private</span> <span class="pl-smi">StoryService</span> mImpl <span class="pl-k">=</span> <span class="pl-c1">null</span>;
+  <span class="pl-k">private</span> <span class="pl-smi">Context</span> mContext;
+  <span class="pl-k">private</span> <span class="pl-k">final</span> <span class="pl-smi">SharedPreferences</span> mSp;
+  <span class="pl-k">private</span> <span class="pl-smi">View</span> mParentView;
+
+  <span class="pl-k">public</span> <span class="pl-en">StoryServiceProxyBridge</span>(<span class="pl-smi">StoryService</span> <span class="pl-v">impl</span>, <span class="pl-smi">Context</span> <span class="pl-v">context</span>,
+                                 <span class="pl-smi">View</span> <span class="pl-v">parentView</span>) {
+    mImpl <span class="pl-k">=</span> impl;
+    mContext <span class="pl-k">=</span> context;
+    mSp <span class="pl-k">=</span> mContext<span class="pl-k">.</span>getSharedPreferences(<span class="pl-smi">BaseActivity</span><span class="pl-c1"><span class="pl-k">.</span>PREFS_KEY</span>,
+                                        <span class="pl-smi">Context</span><span class="pl-c1"><span class="pl-k">.</span>MODE_PRIVATE</span>);
+    mParentView <span class="pl-k">=</span> parentView;
+  }
+
+  <span class="pl-c">/**</span>
+<span class="pl-c">   * Substitutes implementation of a real StoryService.</span>
+<span class="pl-c">   * </span>
+<span class="pl-c">   * @param impl: Real StoryService object.</span>
+<span class="pl-c">   */</span>
+  <span class="pl-k">public</span> <span class="pl-k">void</span> <span class="pl-en">setImplementation</span>(<span class="pl-smi">StoryService</span> <span class="pl-v">impl</span>) {
+    mImpl <span class="pl-k">=</span> impl;
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">BasicResponse</span>&gt;</span>&gt;</span> <span class="pl-en">uploadImage</span>(
+      <span class="pl-k">@Part</span> <span class="pl-smi">MultipartBody</span>.<span class="pl-smi">Part</span> <span class="pl-v">file</span>) {
+    <span class="pl-c">// Doesn't require authentication</span>
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkInternetConnection())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">return</span> mImpl<span class="pl-k">.</span>uploadImage(file);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>&gt;</span>&gt;</span> <span class="pl-en">generateStory</span>(<span class="pl-k">long</span> <span class="pl-v">imageId</span>) {
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkInternetConnection())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkCredentialsAvailability() <span class="pl-k">&amp;&amp;</span> <span class="pl-k">!</span>checkIfCredentialsFake())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">return</span> mImpl<span class="pl-k">.</span>generateStory(imageId);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>&gt;</span>&gt;</span> <span class="pl-en">createStory</span>(<span class="pl-k">@Path</span>(<span class="pl-s"><span class="pl-pds">"</span>image_id<span class="pl-pds">"</span></span>) <span class="pl-k">long</span> <span class="pl-v">imageId</span>,
+                                                 <span class="pl-k">@Body</span> <span class="pl-smi">Story</span> <span class="pl-v">story</span>) {
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkInternetConnection())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkCredentialsAvailability()) {
+      <span class="pl-k">if</span> (checkIfCredentialsFake())
+        <span class="pl-smi">Snackbar</span><span class="pl-k">.</span>make(mParentView, <span class="pl-s"><span class="pl-pds">"</span>Available only for registered users<span class="pl-pds">"</span></span>,
+                      <span class="pl-smi">Snackbar</span><span class="pl-c1"><span class="pl-k">.</span>LENGTH_LONG</span>)<span class="pl-k">.</span>show();
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    }
+    <span class="pl-k">return</span> mImpl<span class="pl-k">.</span>createStory(imageId, story);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>.</span><span class="pl-smi">Multiple</span>&gt;</span>&gt; <span class="pl-en">getStoryList</span>() {
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkInternetConnection())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkCredentialsAvailability())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">return</span> mImpl<span class="pl-k">.</span>getStoryList();
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>.</span><span class="pl-smi">Multiple</span>&gt;</span>&gt; <span class="pl-en">getStoryListSince</span>(
+      <span class="pl-k">@Path</span>(<span class="pl-s"><span class="pl-pds">"</span>unix_timestamp<span class="pl-pds">"</span></span>) <span class="pl-k">long</span> <span class="pl-v">timestamp</span>) {
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkInternetConnection())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkCredentialsAvailability())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">return</span> mImpl<span class="pl-k">.</span>getStoryListSince(timestamp);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>.</span><span class="pl-smi">Multiple</span>&gt;</span>&gt; <span class="pl-en">getStoryListAfter</span>(
+      <span class="pl-k">@Path</span>(<span class="pl-s"><span class="pl-pds">"</span>after_id<span class="pl-pds">"</span></span>) <span class="pl-k">long</span> <span class="pl-v">afterId</span>) {
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkInternetConnection())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">if</span> (<span class="pl-k">!</span>checkCredentialsAvailability())
+      <span class="pl-k">return</span> <span class="pl-c1">null</span>;
+    <span class="pl-k">return</span> mImpl<span class="pl-k">.</span>getStoryListAfter(afterId);
+  }
+
+  <span class="pl-k">private</span> <span class="pl-k">boolean</span> <span class="pl-en">checkInternetConnection</span>() {
+    <span class="pl-smi">ConnectivityManager</span> cm <span class="pl-k">=</span> (<span class="pl-smi">ConnectivityManager</span>) mContext<span class="pl-k">.</span>getSystemService(
+        <span class="pl-smi">Context</span><span class="pl-c1"><span class="pl-k">.</span>CONNECTIVITY_SERVICE</span>);
+    <span class="pl-smi">NetworkInfo</span> netInfo <span class="pl-k">=</span> cm<span class="pl-k">.</span>getActiveNetworkInfo();
+    <span class="pl-k">if</span> (netInfo <span class="pl-k">!=</span> <span class="pl-c1">null</span> <span class="pl-k">&amp;&amp;</span> netInfo<span class="pl-k">.</span>isConnectedOrConnecting())
+      <span class="pl-k">return</span> <span class="pl-c1">true</span>;
+    <span class="pl-smi">Snackbar</span><span class="pl-k">.</span>make(mParentView, <span class="pl-s"><span class="pl-pds">"</span>Internet connection error<span class="pl-pds">"</span></span>,
+                  <span class="pl-smi">Snackbar</span><span class="pl-c1"><span class="pl-k">.</span>LENGTH_LONG</span>)<span class="pl-k">.</span>show();
+    <span class="pl-k">return</span> <span class="pl-c1">false</span>;
+  }
+
+  <span class="pl-k">private</span> <span class="pl-k">boolean</span> <span class="pl-en">checkCredentialsAvailability</span>() {
+    <span class="pl-k">return</span> <span class="pl-k">!</span><span class="pl-smi">TextUtils</span><span class="pl-k">.</span>isEmpty(
+        mSp<span class="pl-k">.</span>getString(<span class="pl-s"><span class="pl-pds">"</span>basicAuthHeader<span class="pl-pds">"</span></span>, <span class="pl-s"><span class="pl-pds">"</span><span class="pl-pds">"</span></span>)) <span class="pl-k">&amp;&amp;</span> <span class="pl-k">!</span>checkIfCredentialsFake();
+  }
+
+  <span class="pl-k">private</span> <span class="pl-k">boolean</span> <span class="pl-en">checkIfCredentialsFake</span>() {
+    <span class="pl-k">return</span> <span class="pl-smi">BaseActivity</span><span class="pl-k">.</span>isDemoRunning(mSp);
+  }
+}</pre></div>
+
+<p>Adapter для <code>DemoAccessService</code></p>
+
+<div class="highlight highlight-source-java"><pre><span class="pl-k">public</span> <span class="pl-k">class</span> <span class="pl-en">StoryServiceDemoAdapter</span> <span class="pl-k">implements</span> <span class="pl-e">StoryService</span> {
+
+  <span class="pl-k">private</span> <span class="pl-smi">DemoAccessService</span> mAdaptee;
+
+  <span class="pl-k">public</span> <span class="pl-en">StoryServiceDemoAdapter</span>(<span class="pl-k">final</span> <span class="pl-smi">DemoAccessService</span> <span class="pl-v">adaptee</span>) {
+    mAdaptee <span class="pl-k">=</span> adaptee;
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">BasicResponse</span>&gt;</span>&gt;</span> <span class="pl-en">uploadImage</span>(
+      <span class="pl-k">@Part</span> <span class="pl-smi">MultipartBody</span>.<span class="pl-smi">Part</span> <span class="pl-v">file</span>) {
+    <span class="pl-k">return</span> mAdaptee<span class="pl-k">.</span>uploadImage(file);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>&gt;</span>&gt;</span> <span class="pl-en">generateStory</span>(<span class="pl-k">long</span> <span class="pl-v">imageId</span>) {
+    <span class="pl-k">return</span> mAdaptee<span class="pl-k">.</span>generateStory(imageId);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>&gt;</span>&gt;</span> <span class="pl-en">createStory</span>(<span class="pl-k">@Path</span>(<span class="pl-s"><span class="pl-pds">"</span>image_id<span class="pl-pds">"</span></span>) <span class="pl-k">long</span> <span class="pl-v">imageId</span>,
+                                                 <span class="pl-k">@Body</span> <span class="pl-smi">Story</span> <span class="pl-v">story</span>) {
+    <span class="pl-k">throw</span> <span class="pl-k">new</span> <span class="pl-smi">IllegalStateException</span>(<span class="pl-s"><span class="pl-pds">"</span>Not supported in demo!<span class="pl-pds">"</span></span>);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>.</span><span class="pl-smi">Multiple</span>&gt;</span>&gt; <span class="pl-en">getStoryList</span>() {
+    <span class="pl-k">throw</span> <span class="pl-k">new</span> <span class="pl-smi">IllegalStateException</span>(<span class="pl-s"><span class="pl-pds">"</span>Not supported in demo!<span class="pl-pds">"</span></span>);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>.</span><span class="pl-smi">Multiple</span>&gt;</span>&gt; <span class="pl-en">getStoryListSince</span>(
+      <span class="pl-k">@Path</span>(<span class="pl-s"><span class="pl-pds">"</span>unix_timestamp<span class="pl-pds">"</span></span>) <span class="pl-k">long</span> <span class="pl-v">timestamp</span>) {
+    <span class="pl-k">throw</span> <span class="pl-k">new</span> <span class="pl-smi">IllegalStateException</span>(<span class="pl-s"><span class="pl-pds">"</span>Not supported in demo!<span class="pl-pds">"</span></span>);
+  }
+
+  <span class="pl-k">@Override</span>
+  <span class="pl-k">public</span> <span class="pl-k">Observable&lt;<span class="pl-k">Response&lt;<span class="pl-smi">Story</span>.</span><span class="pl-smi">Multiple</span>&gt;</span>&gt; <span class="pl-en">getStoryListAfter</span>(
+      <span class="pl-k">@Path</span>(<span class="pl-s"><span class="pl-pds">"</span>after_id<span class="pl-pds">"</span></span>) <span class="pl-k">long</span> <span class="pl-v">afterId</span>) {
+    <span class="pl-k">throw</span> <span class="pl-k">new</span> <span class="pl-smi">IllegalStateException</span>(<span class="pl-s"><span class="pl-pds">"</span>Not supported in demo!<span class="pl-pds">"</span></span>);
+  }
+}</pre></div>
+
+<p>Пример использования в <code>MainActivity</code>:</p>
+
+<div class="highlight highlight-source-java"><pre>  <span class="pl-c1">...</span>
+  <span class="pl-k">protected</span> <span class="pl-k">void</span> initService() {
+    mStoryService <span class="pl-k">=</span> <span class="pl-k">new</span> <span class="pl-smi">StoryServiceProxyBridge</span>(
+        <span class="pl-k">new</span> <span class="pl-smi">BasicAuthServiceCreator</span>()<span class="pl-k">.</span>createInitializer(<span class="pl-v">this</span>)
+                                     .create(<span class="pl-smi">StoryService</span><span class="pl-k">.</span>class),
+        <span class="pl-v">this</span>, mRecyclerView);
+    <span class="pl-c1">...</span>
+  }
+  <span class="pl-c1">...</span></pre></div>
+
+<h2>
+<a id="Неявные-шаблоны-клиента" class="anchor" href="#%D0%9D%D0%B5%D1%8F%D0%B2%D0%BD%D1%8B%D0%B5-%D1%88%D0%B0%D0%B1%D0%BB%D0%BE%D0%BD%D1%8B-%D0%BA%D0%BB%D0%B8%D0%B5%D0%BD%D1%82%D0%B0" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a><a name="head_implicit"></a>Неявные шаблоны клиента</h2>
+
+<p>Хотя я их только использовал, а не проектировал, стоит сказать, что в Retrofit используются Proxy из Java Reflection API, однако они не решают моей задачи и являются очень общими, скорее для более удобного интерфейса объектов библиотеки.</p>
+
+<p>Так же, всё в RxJava та и вообще всё реактивное программирование построено на шаблоне Observer, который очень активно использовал для работы с сетью в приложении.</p>
+
+<p>Так же, использовались стандартные и неотъемлимые для разработки под Android шаблоны: ViewHolder (утилизации списка View), ContentProvider (абстрагирования доступа к данным и предоставления доступа к данным своего приложения другим).</p>
+      </section>
+    </div>
+    <footer>
+      <p>Project maintained by <a href="https://github.com/syniuhin">syniuhin</a></p>
+      <p>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></p>
+    </footer>
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+    
+  </body>
+</html>
